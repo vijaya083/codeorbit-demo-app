@@ -31,6 +31,24 @@ public class PaymentService {
     @Transactional
     public PaymentResponse recordPayment(Long invoiceId, BigDecimal amount, boolean simulateFailure) {
         Invoice invoice = invoices.requireInvoice(invoiceId);
+        return attemptPayment(invoice, amount, simulateFailure);
+    }
+
+    @Transactional
+    public PaymentResponse retryPayment(Long failedPaymentId, boolean simulateFailure) {
+        Payment failedPayment = payments.findById(failedPaymentId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Payment not found"));
+        if (failedPayment.getStatus() != PaymentStatus.FAILED)
+            throw new ApiException(HttpStatus.CONFLICT, "Only failed payments can be retried");
+
+        Invoice invoice = invoices.requireInvoice(failedPayment.getInvoice().getId());
+        if (invoice.getStatus() != InvoiceStatus.OPEN)
+            throw new ApiException(HttpStatus.CONFLICT, "Invoice is not open for payment");
+
+        return attemptPayment(invoice, failedPayment.getAmount(), simulateFailure);
+    }
+
+    private PaymentResponse attemptPayment(Invoice invoice, BigDecimal amount, boolean simulateFailure) {
         if (amount == null || amount.signum() <= 0 || amount.compareTo(invoice.getAmount()) != 0)
             throw new ApiException(HttpStatus.BAD_REQUEST, "Payment amount must equal the invoice amount and be positive");
         if (invoice.getStatus() != InvoiceStatus.OPEN)
