@@ -1,5 +1,6 @@
 package com.codeorbitdemo.notification;
 
+import com.codeorbitdemo.billing.Invoice;
 import com.codeorbitdemo.subscription.Subscription;
 import com.codeorbitdemo.user.User;
 import org.springframework.stereotype.Service;
@@ -12,5 +13,9 @@ public class NotificationService {
     public void subscriptionCreated(Subscription subscription) { emailService.send(subscription.getUser().getEmail(), "Your subscription is active"); }
     public void passwordResetRequested(User user, String token) {
         emailService.send(user.getEmail(), "Password reset", "Use this one-time token to reset your password: " + token);
+    }
+    public void paymentFailed(Invoice invoice) {
+        String message = "Payment for invoice #" + invoice.getId() + " failed. Please review this invoice.";
+        emailService.send(invoice.getSubscription().getUser().getEmail(), "Payment failed", message);
     }
 }

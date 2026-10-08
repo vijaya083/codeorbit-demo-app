@@ -3,12 +3,14 @@ package com.codeorbitdemo.payment;
 import com.codeorbitdemo.billing.Invoice;
 import com.codeorbitdemo.billing.InvoiceService;
 import com.codeorbitdemo.common.exception.ApiException;
+import com.codeorbitdemo.notification.NotificationService;
 import com.codeorbitdemo.subscription.Plan;
 import com.codeorbitdemo.subscription.Subscription;
 import com.codeorbitdemo.user.User;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import java.math.BigDecimal;
@@ -21,6 +23,7 @@ import static org.mockito.Mockito.*;
 class PaymentServiceTest {
     @Mock PaymentRepository payments;
     @Mock InvoiceService invoices;
+    @Mock NotificationService notifications;
 
     @Test
     void recordsSuccessfulPaymentAndMarksInvoicePaid() {
@@ -29,19 +32,39 @@ class PaymentServiceTest {
         when(payments.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
         doAnswer(invocation -> { invoice.markPaid(); return null; }).when(invoices).markPaid(invoice);
 
-        var response = new PaymentService(payments, invoices).recordPayment(8L, new BigDecimal("29.00"));
+        var response = new PaymentService(payments, invoices, notifications).recordPayment(8L, new BigDecimal("29.00"));
 
         assertEquals(PaymentStatus.SUCCEEDED, response.status());
         assertEquals(new BigDecimal("29.00"), response.amount());
         assertEquals(com.codeorbitdemo.billing.InvoiceStatus.PAID, invoice.getStatus());
         verify(invoices).markPaid(invoice);
+        verifyNoInteractions(notifications);
+    }
+
+    @Test
+    void recordsFailedPaymentAndNotifiesWithoutMarkingInvoicePaid() {
+        Invoice invoice = invoice();
+        when(invoices.requireInvoice(8L)).thenReturn(invoice);
+        when(payments.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = new PaymentService(payments, invoices, notifications)
+                .recordPayment(8L, new BigDecimal("29.00"), true);
+
+        assertEquals(PaymentStatus.FAILED, response.status());
+        assertEquals(com.codeorbitdemo.billing.InvoiceStatus.OPEN, invoice.getStatus());
+        ArgumentCaptor<Payment> savedPayment = ArgumentCaptor.forClass(Payment.class);
+        verify(payments).save(savedPayment.capture());
+        assertEquals(PaymentStatus.FAILED, savedPayment.getValue().getStatus());
+        assertSame(invoice, savedPayment.getValue().getInvoice());
+        verify(invoices, never()).markPaid(any());
+        verify(notifications).paymentFailed(invoice);
     }
 
     @Test
     void rejectsNonPositiveOrMismatchedInvoiceAmounts() {
         Invoice invoice = invoice();
         when(invoices.requireInvoice(8L)).thenReturn(invoice);
-        PaymentService service = new PaymentService(payments, invoices);
+        PaymentService service = new PaymentService(payments, invoices, notifications);
 
         assertEquals(HttpStatus.BAD_REQUEST, assertThrows(ApiException.class,
                 () -> service.recordPayment(8L, new BigDecimal("0.00"))).status());
@@ -58,7 +81,7 @@ class PaymentServiceTest {
         when(invoices.requireInvoice(8L)).thenReturn(invoice);
 
         var error = assertThrows(ApiException.class,
-                () -> new PaymentService(payments, invoices).recordPayment(8L, new BigDecimal("29.00")));
+                () -> new PaymentService(payments, invoices, notifications).recordPayment(8L, new BigDecimal("29.00")));
 
         assertEquals(HttpStatus.CONFLICT, error.status());
         verifyNoInteractions(payments);
