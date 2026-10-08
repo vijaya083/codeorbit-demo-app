@@ -49,9 +49,9 @@ JSON request and response bodies are used. Validation and domain errors return a
 | `POST` | `/api/subscriptions/{id}/cancel` | Cancel an active subscription |
 | `GET` | `/api/users/{userId}/subscriptions` | List a user's subscriptions |
 | `GET` | `/api/users/{userId}/invoices` | List a user's invoices |
-| `POST` | `/api/invoices/{invoiceId}/payments` | Record payment for an open invoice (`amount`) |
+| `POST` | `/api/invoices/{invoiceId}/payments` | Record payment for an open invoice (`amount`); set optional `simulateFailure` to `true` to model a local failed attempt |
 | `POST` | `/api/payments/{paymentId}/refunds` | Refund a successful payment (`amount`) |
 
-A user may have one active subscription at a time. A payment must match its invoice amount and can only be recorded for an open invoice. A refund must be positive and cannot exceed the payment's remaining refundable balance.
+A user may have one active subscription at a time. A payment must match its invoice amount and can only be recorded for an open invoice. A refund must be positive and cannot exceed the payment's remaining refundable balance. A failed local payment attempt leaves its invoice open and sends the customer a simulated notification identifying the invoice; the notification excludes payment details.
 
 Password reset tokens expire after 30 minutes and are accepted once. For this demo, the simulated email delivery writes the reset token to application logs; reset request responses do not reveal whether an account exists.

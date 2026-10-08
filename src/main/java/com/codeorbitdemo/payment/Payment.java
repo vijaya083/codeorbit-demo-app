@@ -12,6 +12,9 @@ public class Payment {
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private PaymentStatus status;
     @Column(nullable = false) private Instant createdAt;
     protected Payment() { }
-    public Payment(Invoice invoice, BigDecimal amount) { this.invoice = invoice; this.amount = amount; this.status = PaymentStatus.SUCCEEDED; this.createdAt = Instant.now(); }
+    public Payment(Invoice invoice, BigDecimal amount) { this(invoice, amount, PaymentStatus.SUCCEEDED); }
+    public Payment(Invoice invoice, BigDecimal amount, PaymentStatus status) {
+        this.invoice = invoice; this.amount = amount; this.status = status; this.createdAt = Instant.now();
+    }
     public Long getId() { return id; } public Invoice getInvoice() { return invoice; } public BigDecimal getAmount() { return amount; } public PaymentStatus getStatus() { return status; } public Instant getCreatedAt() { return createdAt; }
 }
