@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -85,6 +86,80 @@ class PaymentServiceTest {
 
         assertEquals(HttpStatus.CONFLICT, error.status());
         verifyNoInteractions(payments);
+        verify(invoices, never()).markPaid(any());
+    }
+
+    @Test
+    void retryCreatesANewSuccessfulAttemptAndMarksTheInvoicePaid() {
+        Invoice invoice = invoice();
+        Payment original = new Payment(invoice, new BigDecimal("29.00"), PaymentStatus.FAILED);
+        when(payments.findById(11L)).thenReturn(Optional.of(original));
+        when(invoices.requireInvoice(any())).thenReturn(invoice);
+        when(payments.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doAnswer(invocation -> { invoice.markPaid(); return null; }).when(invoices).markPaid(invoice);
+
+        var response = new PaymentService(payments, invoices, notifications).retryPayment(11L, false);
+
+        ArgumentCaptor<Payment> savedPayment = ArgumentCaptor.forClass(Payment.class);
+        verify(payments).save(savedPayment.capture());
+        Payment retry = savedPayment.getValue();
+        assertNotSame(original, retry);
+        assertEquals(PaymentStatus.FAILED, original.getStatus());
+        assertEquals(PaymentStatus.SUCCEEDED, retry.getStatus());
+        assertSame(invoice, retry.getInvoice());
+        assertEquals(new BigDecimal("29.00"), retry.getAmount());
+        assertEquals(PaymentStatus.SUCCEEDED, response.status());
+        assertEquals(com.codeorbitdemo.billing.InvoiceStatus.PAID, invoice.getStatus());
+        verify(invoices).markPaid(invoice);
+        verifyNoInteractions(notifications);
+    }
+
+    @Test
+    void failedRetryCreatesAnotherFailedAttemptAndLeavesInvoiceOpen() {
+        Invoice invoice = invoice();
+        Payment original = new Payment(invoice, new BigDecimal("29.00"), PaymentStatus.FAILED);
+        when(payments.findById(11L)).thenReturn(Optional.of(original));
+        when(invoices.requireInvoice(any())).thenReturn(invoice);
+        when(payments.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = new PaymentService(payments, invoices, notifications).retryPayment(11L, true);
+
+        ArgumentCaptor<Payment> savedPayment = ArgumentCaptor.forClass(Payment.class);
+        verify(payments).save(savedPayment.capture());
+        assertNotSame(original, savedPayment.getValue());
+        assertEquals(PaymentStatus.FAILED, original.getStatus());
+        assertEquals(PaymentStatus.FAILED, response.status());
+        assertEquals(com.codeorbitdemo.billing.InvoiceStatus.OPEN, invoice.getStatus());
+        verify(invoices, never()).markPaid(any());
+        verify(notifications).paymentFailed(invoice);
+    }
+
+    @Test
+    void rejectsRetryOfPaymentThatDidNotFail() {
+        Payment payment = new Payment(invoice(), new BigDecimal("29.00"), PaymentStatus.SUCCEEDED);
+        when(payments.findById(11L)).thenReturn(Optional.of(payment));
+
+        var error = assertThrows(ApiException.class,
+                () -> new PaymentService(payments, invoices, notifications).retryPayment(11L, false));
+
+        assertEquals(HttpStatus.CONFLICT, error.status());
+        verify(invoices, never()).requireInvoice(any());
+        verify(payments, never()).save(any());
+    }
+
+    @Test
+    void rejectsRetryWhenInvoiceIsNoLongerOpen() {
+        Invoice invoice = invoice();
+        invoice.markPaid();
+        Payment failedPayment = new Payment(invoice, new BigDecimal("29.00"), PaymentStatus.FAILED);
+        when(payments.findById(11L)).thenReturn(Optional.of(failedPayment));
+        when(invoices.requireInvoice(any())).thenReturn(invoice);
+
+        var error = assertThrows(ApiException.class,
+                () -> new PaymentService(payments, invoices, notifications).retryPayment(11L, false));
+
+        assertEquals(HttpStatus.CONFLICT, error.status());
+        verify(payments, never()).save(any());
         verify(invoices, never()).markPaid(any());
     }
 
