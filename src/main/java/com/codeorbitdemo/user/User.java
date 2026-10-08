@@ -20,6 +20,7 @@ public class User {
     public Long getId() { return id; }
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }
+    public void changePasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
     public String getFirstName() { return firstName; }
     public String getLastName() { return lastName; }
     public boolean isActive() { return active; }

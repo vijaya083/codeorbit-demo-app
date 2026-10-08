@@ -42,6 +42,8 @@ JSON request and response bodies are used. Validation and domain errors return a
 | --- | --- | --- |
 | `POST` | `/api/auth/register` | Register an account (`email`, `password`, `firstName`, `lastName`) |
 | `POST` | `/api/auth/login` | Verify credentials and return a demo token |
+| `POST` | `/api/auth/password-reset/request` | Request a reset token for an active account (`email`) |
+| `POST` | `/api/auth/password-reset/complete` | Set a new password using a reset token (`token`, `newPassword`) |
 | `GET` | `/api/plans` | List active subscription plans |
 | `POST` | `/api/subscriptions` | Subscribe a user (`userId`, `planId`) and create an initial invoice |
 | `POST` | `/api/subscriptions/{id}/cancel` | Cancel an active subscription |
@@ -51,3 +53,5 @@ JSON request and response bodies are used. Validation and domain errors return a
 | `POST` | `/api/payments/{paymentId}/refunds` | Refund a successful payment (`amount`) |
 
 A user may have one active subscription at a time. A payment must match its invoice amount and can only be recorded for an open invoice. A refund must be positive and cannot exceed the payment's remaining refundable balance.
+
+Password reset tokens expire after 30 minutes and are accepted once. For this demo, the simulated email delivery writes the reset token to application logs; reset request responses do not reveal whether an account exists.
