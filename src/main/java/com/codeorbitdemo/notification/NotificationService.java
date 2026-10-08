@@ -10,4 +10,7 @@ public class NotificationService {
     public NotificationService(EmailService emailService) { this.emailService = emailService; }
     public void registrationCompleted(User user) { emailService.send(user.getEmail(), "Welcome to CodeOrbit Demo"); }
     public void subscriptionCreated(Subscription subscription) { emailService.send(subscription.getUser().getEmail(), "Your subscription is active"); }
+    public void passwordResetRequested(User user, String token) {
+        emailService.send(user.getEmail(), "Password reset", "Use this one-time token to reset your password: " + token);
+    }
 }
